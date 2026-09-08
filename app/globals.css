@@ -1,0 +1,20 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: light;
+}
+
+html { scroll-behavior: smooth; }
+
+body {
+  background: #ffffff;
+  color: #172B4D;
+}
+
+@layer components {
+  .container-page { @apply mx-auto w-full max-w-7xl px-6 lg:px-8; }
+  .card { @apply rounded-2xl border border-slate-200 bg-white shadow-sm; }
+  .eyebrow { @apply text-xs font-semibold uppercase tracking-[0.22em] text-slate-500; }
+}

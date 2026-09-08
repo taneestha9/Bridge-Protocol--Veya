@@ -1,0 +1,277 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum OrganizationStatus {
+  pending
+  active
+  suspended
+}
+
+enum MemberRole {
+  platform_admin
+  chapter_admin
+  coordinator
+  volunteer
+  viewer
+}
+
+enum VerificationStatus {
+  pending
+  reviewed
+  verified
+  flagged
+}
+
+enum CaseStatus {
+  submitted
+  under_review
+  verified
+  open
+  matched
+  in_progress
+  fulfilled
+  closed
+  rejected
+  cancelled
+  suspended
+}
+
+enum Urgency {
+  green
+  yellow
+  red
+}
+
+enum VolunteerStatus {
+  active
+  inactive
+  suspended
+}
+
+enum MatchStatus {
+  recommended
+  approved
+  rejected
+  completed
+}
+
+enum DonorType {
+  individual
+  corporate
+  institutional
+}
+
+model Organization {
+  id            String             @id @default(cuid())
+  name          String
+  slug          String             @unique
+  city          String
+  country       String
+  type          String
+  description   String?            @db.Text
+  website       String?
+  logoUrl       String?
+  latitude      Float?
+  longitude     Float?
+  configuration Json?
+  status        OrganizationStatus @default(pending)
+  createdAt     DateTime           @default(now())
+  updatedAt     DateTime           @updatedAt
+
+  members       OrganizationMember[]
+  beneficiaries Beneficiary[]
+  volunteers    Volunteer[]
+  cases         Case[]
+  donors        Donor[]
+  activities    ActivityLog[]
+
+  @@index([country, city])
+  @@index([status])
+  @@map("organizations")
+}
+
+model User {
+  id         String   @id @default(cuid())
+  authUserId String   @unique
+  email      String   @unique
+  fullName   String
+  avatarUrl  String?
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  memberships OrganizationMember[]
+  activities  ActivityLog[]
+
+  @@map("users")
+}
+
+model OrganizationMember {
+  id             String     @id @default(cuid())
+  userId         String
+  organizationId String
+  role           MemberRole @default(viewer)
+  joinedAt       DateTime   @default(now())
+
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, organizationId])
+  @@index([organizationId, role])
+  @@map("organization_members")
+}
+
+model Beneficiary {
+  id                 String             @id @default(cuid())
+  organizationId     String
+  residentId         String
+  name               String
+  phone              String?
+  location           String
+  lat                Float?
+  lng                Float?
+  notes              String?            @db.Text
+  verificationStatus VerificationStatus @default(pending)
+  createdAt          DateTime           @default(now())
+  updatedAt          DateTime           @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  cases        Case[]
+
+  @@unique([organizationId, residentId])
+  @@index([organizationId, verificationStatus])
+  @@map("beneficiaries")
+}
+
+model Case {
+  id                 String     @id @default(cuid())
+  organizationId     String
+  beneficiaryId      String
+  title              String
+  description        String     @db.Text
+  category           String
+  urgency            Urgency    @default(green)
+  status             CaseStatus @default(submitted)
+  verificationLevel  Int        @default(0)
+  matchedVolunteerId String?
+  donorId            String?
+  estimatedValue     Float?
+  createdAt          DateTime   @default(now())
+  updatedAt          DateTime   @updatedAt
+  completedAt        DateTime?
+
+  organization Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  beneficiary  Beneficiary    @relation(fields: [beneficiaryId], references: [id], onDelete: Cascade)
+  volunteer    Volunteer?     @relation(fields: [matchedVolunteerId], references: [id], onDelete: SetNull)
+  donor        Donor?         @relation(fields: [donorId], references: [id], onDelete: SetNull)
+  auditLogs    CaseAuditLog[]
+  matches      Match[]
+
+  @@index([organizationId, status])
+  @@index([organizationId, category])
+  @@map("cases")
+}
+
+model CaseAuditLog {
+  id            String   @id @default(cuid())
+  caseId        String
+  actorId       String
+  action        String
+  previousState String?
+  newState      String
+  metadata      Json?
+  createdAt     DateTime @default(now())
+
+  case Case @relation(fields: [caseId], references: [id], onDelete: Cascade)
+
+  @@index([caseId, createdAt])
+  @@map("case_audit_logs")
+}
+
+model Volunteer {
+  id               String          @id @default(cuid())
+  organizationId   String
+  name             String
+  email            String?
+  phone            String?
+  location         String
+  lat              Float?
+  lng              Float?
+  skills           String[]
+  availability     String?
+  reliabilityScore Float           @default(0)
+  status           VolunteerStatus @default(active)
+  deliveryCount    Int             @default(0)
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+
+  organization  Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  assignedCases Case[]
+  matches       Match[]
+
+  @@index([organizationId, status])
+  @@map("volunteers")
+}
+
+model Donor {
+  id               String    @id @default(cuid())
+  organizationId   String
+  name             String
+  email            String?
+  phone            String?
+  type             DonorType @default(individual)
+  totalContributed Float     @default(0)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  cases        Case[]
+  Match        Match[]
+
+  @@index([organizationId])
+  @@map("donors")
+}
+
+model Match {
+  id          String      @id @default(cuid())
+  caseId      String
+  volunteerId String?
+  donorId     String?
+  matchScore  Float?
+  status      MatchStatus @default(recommended)
+  approvedBy  String?
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  case      Case       @relation(fields: [caseId], references: [id], onDelete: Cascade)
+  volunteer Volunteer? @relation(fields: [volunteerId], references: [id], onDelete: SetNull)
+  donor     Donor?     @relation(fields: [donorId], references: [id], onDelete: SetNull)
+
+  @@index([caseId, status])
+  @@index([volunteerId])
+  @@map("matches")
+}
+
+model ActivityLog {
+  id             String   @id @default(cuid())
+  organizationId String?
+  actorType      String
+  actorId        String
+  action         String
+  entityType     String?
+  entityId       String?
+  metadata       Json?
+  createdAt      DateTime @default(now())
+
+  organization Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  actor        User?         @relation(fields: [actorId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, createdAt])
+  @@map("activity_logs")
+}

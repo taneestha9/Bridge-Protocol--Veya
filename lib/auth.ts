@@ -15,7 +15,18 @@ export async function getCurrentUserWithMemberships() {
 
   return prisma.user.findUnique({
     where: { authUserId: authUser.id },
-    include: { memberships: { include: { organization: true } } },
+    include: {
+      memberships: { include: { organization: true } },
+      chapterMemberships: {
+        include: {
+          chapter: {
+            include: {
+              organization: true,
+            },
+          },
+        },
+      },
+    },
   })
 }
 
@@ -31,7 +42,18 @@ export async function getOrCreateDbUser() {
     where: { authUserId: authUser.id },
     update: { email: authUser.email, fullName },
     create: { authUserId: authUser.id, email: authUser.email, fullName },
-    include: { memberships: { include: { organization: true } } },
+    include: {
+      memberships: { include: { organization: true } },
+      chapterMemberships: {
+        include: {
+          chapter: {
+            include: {
+              organization: true,
+            },
+          },
+        },
+      },
+    },
   })
 }
 

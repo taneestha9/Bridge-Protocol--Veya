@@ -11,36 +11,27 @@ export async function getSupabaseUser() {
 
 export async function getCurrentUserWithMemberships() {
   const authUser = await getSupabaseUser()
-  if (!authUser || !authUser.email) return null
+  if (!authUser?.email) return null
 
-  const dbUser = await prisma.user.findUnique({
+  return prisma.user.findUnique({
     where: { authUserId: authUser.id },
-    include: { memberships: { include: { organization: true } } }
+    include: { memberships: { include: { organization: true } } },
   })
-
-  return dbUser
 }
 
 export async function getOrCreateDbUser() {
   const authUser = await getSupabaseUser()
-  if (!authUser || !authUser.email) return null
+  if (!authUser?.email) return null
+
+  const fullName =
+    (authUser.user_metadata?.full_name as string | undefined) ||
+    authUser.email.split("@")[0]
 
   return prisma.user.upsert({
     where: { authUserId: authUser.id },
-    update: {
-      email: authUser.email,
-      fullName:
-        (authUser.user_metadata?.full_name as string | undefined) ||
-        authUser.email.split("@")[0]
-    },
-    create: {
-      authUserId: authUser.id,
-      email: authUser.email,
-      fullName:
-        (authUser.user_metadata?.full_name as string | undefined) ||
-        authUser.email.split("@")[0]
-    },
-    include: { memberships: { include: { organization: true } } }
+    update: { email: authUser.email, fullName },
+    create: { authUserId: authUser.id, email: authUser.email, fullName },
+    include: { memberships: { include: { organization: true } } },
   })
 }
 
@@ -54,7 +45,8 @@ export async function requireOrgAccess(
   const membership = user.memberships.find(
     (m) => m.organizationId === organizationId
   )
-  if (!membership) throw new Error("Forbidden: not a member of this organization")
+
+  if (!membership) throw new Error("Forbidden")
 
   if (allowedRoles.length > 0 && !allowedRoles.includes(membership.role)) {
     throw new Error("Forbidden: insufficient role")
